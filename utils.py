@@ -312,12 +312,11 @@ def epoch(mode, dataloader, net, optimizer, criterion, args, aug):
         if aug:
             if args.dsa:
                 img = DiffAugment(img, args.dsa_strategy, param=args.dsa_param)
-            elif args.attack:
-                # For now, we don't want to attack the synthetic dataset during model update
-                pass
-                # img = Attack(img, lab, net, args.attack_strategy, param=args.attack_param)
             else:
                 img = augment(img, args.dc_aug_param, device=args.device)
+        if args.attack_eval and mode == 'test':
+            img = Attack(img, lab, net, args.attack_strategy, seed=int(time.time() * 1000) % 100000, param=args.attack_param)
+        
         n_b = lab.shape[0]
 
         output = net(img)

@@ -4,21 +4,27 @@ import argparse
 import torch
 import torch.nn as nn
 import pdb
-from utils import epoch, get_network, TensorDataset
+from utils import get_dataset, epoch, get_network, TensorDataset, Attack, ParamAttack
+import torchattacks
 
 
 def main():
 
     parser = argparse.ArgumentParser(description='Parameter Processing')
-    parser.add_argument('--dataset', type=str, default='CIFAR10', help='dataset')
     parser.add_argument('--model', type=str, default='ConvNet', help='model')
-    parser.add_argument('--data_type', type=str, default='syn', help='syn or real data')
-    parser.add_argument('--data_path', type=str, default='data', help='dataset path')
+    parser.add_argument('--real_dataset', type=str, default='CIFAR10', help='dataset')
+    parser.add_argument('--real_data_path', type=str, default='data', help='real dataset path')
+
+    parser.add_argument('--train_data_type', type=str, default='syn', help='train model with syn or real data')
+    parser.add_argument('--syn_data_type', type=str, default='Attack', help='which synthetic data to use, Attack/DC/DSA')
     parser.add_argument('--save_path', type=str, default='result', help='path to save results')
     parser.add_argument('--lr_net', type=float, default=0.01, help='learning rate for updating network parameters')
     parser.add_argument('--train_epoch', type=int, default=50, help='epochs to train net')
     parser.add_argument('--trials', type=int, default=50, help='trials to test net')
     parser.add_argument('--batch_train', type=int, default=256, help='batch size for training networks')
+    parser.add_argument('--batch_test', type=int, default=256, help='batch size for testing networks')
+    parser.add_argument('--attack_eval', type=bool, default=False, help='whether to perform attack during eval')
+    parser.add_argument('--attack_strategy', type=str, default='pgd', help='type of adversarial attack')
 
     # parser.add_argument('--eval_mode', type=str, default='SS', help='eval_mode') # S: the same to training model, M: multi architectures,  W: net width, D: net depth, A: activation function, P: pooling layer, N: normalization layer,
     # parser.add_argument('--num_exp', type=int, default=5, help='the number of experiments')
@@ -30,26 +36,54 @@ def main():
     args = parser.parse_args()
     args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    if not os.path.exists(args.data_path):
-        print(f'Error: {args.data_path} not found.')
+    if not os.path.exists(args.real_data_path):
+        print(f'Error: {args.real_data_path} not found.')
+        sys.exit(1)
+
+    args.syn_data_path = f'./result/res_{args.syn_data_type}_CIFAR10_ConvNet_10ipc.pt'
+    if not os.path.exists(args.syn_data_path):
+        print(f'Error: {args.syn_data_path} not found.')
         sys.exit(1)
 
     if not os.path.exists(args.save_path):
         os.mkdir(args.save_path)
 
-    if args.data_type == 'syn':
-        data = torch.load(args.data_path)
-        images = data['data'][0][0]
-        labels = data['data'][0][1]
+    args.attack_param = ParamAttack()
+    if args.train_data_type == 'real':
+        args.syn_data_type = 'no attack'
 
-        # Hard coded for now
-        channel = 3
-        num_classes = 10
-        im_size = (32, 32)
+    if args.train_data_type == 'syn':
+        args.train_epoch = 1000
+
+    # Load Distilled Data
+    syn_data = torch.load(args.syn_data_path)
+    syn_images = syn_data['data'][0][0]
+    syn_labels = syn_data['data'][0][1]
+    channel = 3
+    num_classes = 10
+    im_size = (32, 32)
+
+
+    # Load Real Data (only need info if using real data to train)
+    if args.train_data_type == 'real':
+        channel, im_size, num_classes, class_names, mean, std, dst_train, dst_test, testloader = get_dataset(args.real_dataset, args.real_data_path)
+        real_train_images = [torch.unsqueeze(dst_train[i][0], dim=0) for i in range(len(dst_train))]
+        real_train_labels = [dst_train[i][1] for i in range(len(dst_train))]
+        real_train_images = torch.cat(real_train_images, dim=0).to(args.device)
+        real_train_labels = torch.tensor(real_train_labels, dtype=torch.long, device=args.device)
+    else:
+        dst_test = get_dataset(args.real_dataset, args.real_data_path)[7]
+
+    real_test_images = [torch.unsqueeze(dst_test[i][0], dim=0) for i in range(len(dst_test))]
+    real_test_labels = [dst_test[i][1] for i in range(len(dst_test))]
+    real_test_images = torch.cat(real_test_images, dim=0).to(args.device)
+    real_test_labels = torch.tensor(real_test_labels, dtype=torch.long, device=args.device)
 
 
     acc_total = 0
     for trial in range(args.trials):
+
+        # Setup net
         net = get_network(args.model, channel, num_classes, im_size).to(args.device) # get a random model
         net.train()
         net_parameters = list(net.parameters())
@@ -58,18 +92,34 @@ def main():
         criterion = nn.CrossEntropyLoss().to(args.device)
         loss_avg = 0
 
-        images_train, labels_train = copy.deepcopy(images.detach()), copy.deepcopy(labels.detach())  # avoid any unaware modification
+        # Setup training data
+        if args.train_data_type == 'syn':
+            images_train, labels_train = copy.deepcopy(syn_images.detach()), copy.deepcopy(syn_labels.detach()) 
+        else:
+            images_train, labels_train = copy.deepcopy(real_train_images.detach()), copy.deepcopy(real_train_labels.detach()) 
+
         data_train = TensorDataset(images_train, labels_train)
         trainloader = torch.utils.data.DataLoader(data_train, batch_size=args.batch_train, shuffle=True, num_workers=0)
+
+        # Train net
         for e in range(args.train_epoch):
             epoch('train', trainloader, net, optimizer_net, criterion, args, aug = False)
 
-             
-        loss, acc = epoch('test', trainloader, net, optimizer_net, criterion, args, aug = False)
+        # Setup test data (attack handled in epoch function)
+        images_test, labels_test = copy.deepcopy(real_test_images.detach()), copy.deepcopy(real_test_labels.detach()) 
+        data_test = TensorDataset(images_test, labels_test)
+        testloader = torch.utils.data.DataLoader(data_test, batch_size=args.batch_test, shuffle=True, num_workers=0)
+        
+        # Test net
+        loss, acc = epoch('test', testloader, net, optimizer_net, criterion, args, aug = False)
         print(f'Trial {trial}: acc = {acc}')
         acc_total += acc
 
-    print(f'Average accuracy over {args.trials} trials is {acc_total / args.trials}')
+    if args.attack_eval:
+        print(f'Trained with {args.train_data_type} data ({args.syn_data_type}), tested on {args.attack_strategy} attacked {args.real_dataset} dataset.')
+    else:
+        print(f'Trained with {args.train_data_type} data ({args.syn_data_type}), tested on normal {args.real_dataset} dataset.')
+    print(f'Average accuracy over {args.trials} trials is {round(acc_total / args.trials, 4)}')
 
 if __name__ == '__main__':
     main()
