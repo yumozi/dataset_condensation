@@ -40,10 +40,12 @@ class ConvNet(nn.Module):
         self.features, shape_feat = self._make_layers(channel, net_width, net_depth, net_norm, net_act, net_pooling, im_size)
         num_feat = shape_feat[0]*shape_feat[1]*shape_feat[2]
         self.classifier = nn.Linear(num_feat, num_classes)
+        # self.dropout = nn.Dropout(0.25) # temp
 
     def forward(self, x):
         out = self.features(x)
         out = out.view(out.size(0), -1)
+        # out = self.dropout(out) # temp
         out = self.classifier(out)
         return out
 

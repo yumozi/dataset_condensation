@@ -51,9 +51,15 @@ def get_dataset(dataset, data_path):
         num_classes = 10
         mean = [0.4914, 0.4822, 0.4465]
         std = [0.2023, 0.1994, 0.2010]
-        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
-        dst_train = datasets.CIFAR10(data_path, train=True, download=True, transform=transform) # no augmentation
-        dst_test = datasets.CIFAR10(data_path, train=False, download=True, transform=transform)
+        transform_train = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=mean, std=std),
+        ])
+        transform_test = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
+        dst_train = datasets.CIFAR10(data_path, train=True, download=True, transform=transform_train) # no augmentation
+        dst_test = datasets.CIFAR10(data_path, train=False, download=True, transform=transform_test)
         class_names = dst_train.classes
 
     elif dataset == 'CIFAR100':
@@ -321,6 +327,7 @@ def epoch(mode, dataloader, net, optimizer, criterion, args, aug):
 
         output = net(img)
         loss = criterion(output, lab)
+
         acc = np.sum(np.equal(np.argmax(output.cpu().data.numpy(), axis=-1), lab.cpu().data.numpy()))
 
         loss_avg += loss.item()*n_b
@@ -337,7 +344,75 @@ def epoch(mode, dataloader, net, optimizer, criterion, args, aug):
 
     return loss_avg, acc_avg
 
+def epoch_alt(mode, norm_dataloader, atk_dataloader, net, optimizer, criterion, args, aug):
+    loss_avg, acc_avg, num_exp = 0, 0, 0
+    net = net.to(args.device)
+    criterion = criterion.to(args.device)
 
+    if mode == 'train':
+        net.train()
+    else:
+        net.eval()
+
+    norm_dataloader_iterator = iter(norm_dataloader)
+
+    for i_batch, atk_datum in enumerate(atk_dataloader):
+
+        try:
+            norm_datum = next(norm_dataloader_iterator)
+        except StopIteration:
+            norm_dataloader_iterator = iter(norm_dataloader)
+            norm_datum = next(norm_dataloader_iterator)
+
+        atk_img = atk_datum[0].float().to(args.device)
+        atk_lab = atk_datum[1].long().to(args.device)
+        norm_img = norm_datum[0].float().to(args.device)
+        norm_lab = norm_datum[1].long().to(args.device)
+
+        # if aug:
+        #     if args.dsa:
+        #         img = DiffAugment(img, args.dsa_strategy, param=args.dsa_param)
+        #     else:
+        #         img = augment(img, args.dc_aug_param, device=args.device)
+        # if args.attack_eval and mode == 'test':
+        #     img = Attack(img, lab, net, args.attack_strategy, seed=int(time.time() * 1000) % 100000, param=args.attack_param)
+        
+        atk_n_b = atk_lab.shape[0]
+        norm_n_b = norm_lab.shape[0]
+
+        atk_output = net(atk_img)
+        atk_loss = criterion(atk_output, atk_lab)
+        atk_acc = np.sum(np.equal(np.argmax(atk_output.cpu().data.numpy(), axis=-1), atk_lab.cpu().data.numpy()))
+
+        loss_avg += atk_loss.item()*atk_n_b
+        acc_avg += atk_acc
+        num_exp += atk_n_b
+
+        norm_output = net(norm_img)
+        norm_loss = criterion(norm_output, norm_lab)
+        norm_acc = np.sum(np.equal(np.argmax(norm_output.cpu().data.numpy(), axis=-1), norm_lab.cpu().data.numpy()))
+
+        loss_avg += norm_loss.item()*norm_n_b
+        acc_avg += norm_acc
+        num_exp += norm_n_b
+        if args.aux_bn:
+            loss = atk_loss + norm_loss
+
+        elif args.alp:
+            loss = atk_loss
+            logit_diff = net(atk_img) - net(norm_img)
+            print(torch.norm(logit_diff, dim=1).mean())
+            loss += torch.norm(logit_diff, dim=1).mean()
+
+        if mode == 'train':
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+    loss_avg /= num_exp
+    acc_avg /= num_exp
+
+    return loss_avg, acc_avg
 
 def evaluate_synset(it_eval, net, images_train, labels_train, testloader, args):
     net = net.to(args.device)
@@ -645,6 +720,7 @@ def rand_cutout(x, param):
 
 class ParamAttack:
     def __init__(self):
+        # self.eps = 8/255
         self.eps = 8/255
         self.alpha = 1/255
         self.step = 10
@@ -694,4 +770,3 @@ AUGMENT_FNS = {
     'scale': [rand_scale],
     'rotate': [rand_rotate],
 }
-
