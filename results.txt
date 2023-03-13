@@ -1,0 +1,72 @@
+DSA: Run 1 experiments, train on ConvNet, evaluate 20 random ConvNet, mean  = 51.75%  std = 0.29%
+DC: Run 1 experiments, train on ConvNet, evaluate 20 random ConvNet, mean  = 44.84%  std = 0.41%
+Attack: Run 1 experiments, train on ConvNet, evaluate 20 random ConvNet, mean  = 38.24%  std = 0.65%   *just after 500 iter has same result
+
+5 hours attack
+
+ConvNet: width 128, depth 3, 'relu', 'instancenorm', 'avgpooling'
+
+Eval:
+python eval.py --data_path ./result/res_DSA_CIFAR10_ConvNet_10ipc.pt
+DC: 0.9440000000000002
+DSA: 0.9067999999999998
+Attack: 0.9264000000000001
+
+Results Feb 15:
+
+Trained with syn data (Attack), tested on normal CIFAR10 dataset.
+Average accuracy over 50 trials is 0.3801
+
+Trained with syn data (Attack), tested on pgd attacked CIFAR10 dataset.
+Average accuracy over 50 trials is 0.2755
+
+Trained with syn data (DSA), tested on normal CIFAR10 dataset.
+Average accuracy over 50 trials is 0.4383
+
+Trained with syn data (DSA), tested on pgd attacked CIFAR10 dataset.
+Average accuracy over 50 trials is 0.2153
+
+Trained with syn data (DC), tested on normal CIFAR10 dataset.
+Average accuracy over 50 trials is 0.4549
+
+Trained with syn data (DC), tested on pgd attacked CIFAR10 dataset.
+Average accuracy over 50 trials is 0.2278
+
+Trained with real data (no attack), tested on normal CIFAR10 dataset.
+Average accuracy over 50 trials is 0.755
+
+Trained with real data (no attack), tested on pgd attacked CIFAR10 dataset.
+Average accuracy over 50 trials is 0.2478
+
+Results Feb 27:
+
+Trained with syn data (DC), tested on normal CIFAR10 dataset. (auxiliary attack data + instancenorm)
+Average accuracy over 50 trials is 0.4658
+
+Trained with syn data (DC), tested on pgd attacked CIFAR10 dataset. (auxiliary attack data + instancenorm)
+Average accuracy over 50 trials is 0.2868
+
+Trained with syn data (DSA), tested on normal CIFAR10 dataset. (auxiliary attack data + instancenorm)
+Average accuracy over 50 trials is 0.4588
+
+Trained with syn data (DSA), tested on pgd attacked CIFAR10 dataset. (auxiliary attack data + instancenorm)
+Average accuracy over 50 trials is 0.2834
+
+Trained with real data (no attack), tested on normal CIFAR10 dataset. (auxiliary attack data + instancenorm)
+Average accuracy over 50 trials is 0.6937
+
+Trained with real data (no attack), tested on pgd attacked CIFAR10 dataset. (auxiliary attack data + instancenorm)
+Average accuracy over 50 trials is 0.1649
+
+Results March 13:
+
+Trained with syn data (DC), tested on normal CIFAR10 dataset. (live ALP)
+Average accuracy over 50 trials is 0.4219
+
+Trained with syn data (DC), tested on pgd attacked CIFAR10 dataset.
+Average accuracy over 50 trials is 0.2681
+
+Trained with syn data (DC), tested on normal CIFAR10 dataset. (random embed ALP)
+Average accuracy over 50 trials is 0.4219
+
+
