@@ -39,6 +39,8 @@ def main():
     args.attack_param = ParamAttack()
     args.dsa = True if args.method == 'DSA' else False
     args.attack = True if args.method == "Attack" else False
+    args.attack_eval = False
+
 
     if not os.path.exists(args.data_path):
         os.mkdir(args.data_path)
