@@ -721,7 +721,7 @@ def rand_cutout(x, param):
 class ParamAttack:
     def __init__(self):
         # self.eps = 8/255
-        self.eps = 16/255
+        self.eps = 8/255
         self.alpha = 1/255
         self.step = 10
 
