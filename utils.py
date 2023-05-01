@@ -755,9 +755,20 @@ def pgd(x, y, net, param):
     x = attack(x, y)
     return x
 
+def fgsm(x, y, net, param):
+    attack = torchattacks.FGSM(net, eps=param.eps)
+    x = attack(x, y)
+    return x
+
+def auto_attack(x, y, net, param):
+    attack = torchattacks.AutoAttack(net, norm=param.norm, eps=param.eps, version=param.version)
+    x = attack(x, y)
+    return x
 
 ATTACK_FNS = {
     'pgd' : pgd,
+    'fgsm' : fgsm,
+    'auto_attack' : auto_attack,
 }
 
 
