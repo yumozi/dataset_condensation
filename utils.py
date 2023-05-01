@@ -51,15 +51,9 @@ def get_dataset(dataset, data_path):
         num_classes = 10
         mean = [0.4914, 0.4822, 0.4465]
         std = [0.2023, 0.1994, 0.2010]
-        transform_train = transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=mean, std=std),
-        ])
-        transform_test = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
-        dst_train = datasets.CIFAR10(data_path, train=True, download=True, transform=transform_train) # no augmentation
-        dst_test = datasets.CIFAR10(data_path, train=False, download=True, transform=transform_test)
+        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
+        dst_train = datasets.CIFAR10(data_path, train=True, download=True, transform=transform) # no augmentation
+        dst_test = datasets.CIFAR10(data_path, train=False, download=True, transform=transform)
         class_names = dst_train.classes
 
     elif dataset == 'CIFAR100':
@@ -398,10 +392,15 @@ def epoch_alt(mode, norm_dataloader, atk_dataloader, net, optimizer, criterion, 
         if args.aux_bn:
             loss = atk_loss + norm_loss
 
-        elif args.alp:
+        elif args.alp_embed:
             loss = atk_loss
             logit_diff = net(atk_img) - net(norm_img)
-            print(torch.norm(logit_diff, dim=1).mean())
+            loss += torch.norm(logit_diff, dim=1).mean()
+        
+        elif args.alp_live:
+            loss = norm_loss
+            live_atk_img = Attack(norm_img, norm_lab, net, args.attack_strategy, seed=int(time.time() * 1000) % 100000, param=args.attack_param)
+            logit_diff = net(live_atk_img) - net(norm_img)
             loss += torch.norm(logit_diff, dim=1).mean()
 
         if mode == 'train':

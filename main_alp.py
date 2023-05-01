@@ -27,7 +27,7 @@ def main():
     parser.add_argument('--batch_train', type=int, default=256, help='batch size for training networks')
     parser.add_argument('--init', type=str, default='noise', help='noise/real: initialize synthetic images from random noise or randomly sampled real images.')
     parser.add_argument('--dsa_strategy', type=str, default='None', help='differentiable Siamese augmentation strategy')
-    parser.add_argument('--attack_strategy', type=str, default='None', help='attack strategy')
+    parser.add_argument('--attack_strategy', type=str, default='pgd', help='attack strategy')
     parser.add_argument('--data_path', type=str, default='data', help='dataset path')
     parser.add_argument('--save_path', type=str, default='result', help='path to save results')
     parser.add_argument('--dis_metric', type=str, default='ours', help='distance metric')
@@ -129,11 +129,11 @@ def main():
                         args.dc_aug_param = None
                         print('DSA augmentation strategy: \n', args.dsa_strategy)
                         print('DSA augmentation parameters: \n', args.dsa_param.__dict__)
-                    elif args.attack:
-                        args.epoch_eval_train = 1000
-                        args.dc_aug_param = None
-                        print('Attack strategy: \n', args.attack_strategy)
-                        print('Attack parameters: \n', args.attack_param.__dict__)
+                    # elif args.attack:
+                    #     args.epoch_eval_train = 1000
+                    #     args.dc_aug_param = None
+                    #     print('Attack strategy: \n', args.attack_strategy)
+                    #     print('Attack parameters: \n', args.attack_param.__dict__)
                     else:
                         args.dc_aug_param = get_daparam(args.dataset, args.model, model_eval, args.ipc) # This augmentation parameter set is only for DC method. It will be muted when args.dsa is True.
                         print('DC augmentation parameters: \n', args.dc_aug_param)
@@ -266,6 +266,10 @@ def main():
                     norm_gw_syn = torch.autograd.grad(norm_loss_syn, norm_net_parameters, create_graph=True)
                     norm_loss += match_loss(norm_gw_syn, gw_real, args)
 
+                    # After finishing calculating the gradient of the real data, we can attack the synthetic data
+                    seed = int(time.time() * 1000) % 100000
+                    img_real = Attack(img_real, lab_real, atk_net, args.attack_strategy, seed=seed, param=args.attack_param)
+
                     output_real = atk_net(img_real)
                     loss_real = criterion(output_real, lab_real)
                     gw_real = torch.autograd.grad(loss_real, atk_net_parameters)
@@ -312,9 +316,9 @@ def main():
 
             if it == args.Iteration: # only record the final results
                 norm_data_save.append([copy.deepcopy(norm_image_syn.detach().cpu()), copy.deepcopy(norm_label_syn.detach().cpu())])
-                torch.save({'data': norm_data_save, 'accs_all_exps': accs_all_exps, }, os.path.join(args.save_path, 'res_alp_%s_%s_%s_%dipc.pt'%(args.method, args.dataset, args.model, args.ipc)))
+                torch.save({'data': norm_data_save, 'accs_all_exps': norm_accs_all_exps, }, os.path.join(args.save_path, 'res_alp_%s_%s_%s_%dipc.pt'%(args.method, args.dataset, args.model, args.ipc)))
                 atk_data_save.append([copy.deepcopy(atk_image_syn.detach().cpu()), copy.deepcopy(atk_label_syn.detach().cpu())])
-                torch.save({'data': atk_data_save, 'accs_all_exps': accs_all_exps, }, os.path.join(args.save_path, 'res_alp_%s_%s_%s_%dipc.pt'%('Attack', args.dataset, args.model, args.ipc)))
+                torch.save({'data': atk_data_save, 'accs_all_exps': atk_accs_all_exps, }, os.path.join(args.save_path, 'res_alp_%s_%s_%s_%dipc.pt'%('Attack', args.dataset, args.model, args.ipc)))
 
     print('\n==================== Final Results ====================\n')
     for key in model_eval_pool:

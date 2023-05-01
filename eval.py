@@ -28,7 +28,8 @@ def main():
     parser.add_argument('--attack_strategy', type=str, default='pgd', help='type of adversarial attack')
     parser.add_argument('--transform', type=bool, default=False, help='whether to apply transformation for training')
     parser.add_argument('--aux_bn', type=bool, default=False, help='whether to apply auxiliary BN for training')
-    parser.add_argument('--alp', type=bool, default=False, help='whether to apply adversarial logit pairing for training (must be used for aux_bn for now)')
+    parser.add_argument('--alp_embed', type=bool, default=False, help='whether to apply adversarial logit pairing for training')
+    parser.add_argument('--alp_live', type=bool, default=False, help='whether to apply adversarial logit pairing for training')
 
     # parser.add_argument('--eval_mode', type=str, default='SS', help='eval_mode') # S: the same to training model, M: multi architectures,  W: net width, D: net depth, A: activation function, P: pooling layer, N: normalization layer,
     # parser.add_argument('--num_exp', type=int, default=5, help='the number of experiments')
@@ -41,7 +42,7 @@ def main():
     args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # If aux_bn is True, also load Attacked Distilled Data
-    if args.aux_bn or args.alp:
+    if args.aux_bn or args.alp_embed or args.alp_live:
         args.aux_data_path = f'./result/res_Attack_CIFAR10_ConvNet_10ipc.pt'
         if not os.path.exists(args.aux_data_path):
             print(f'Error: Attack data not found.')
@@ -123,18 +124,18 @@ def main():
             images_train, labels_train = copy.deepcopy(real_train_images.detach()), copy.deepcopy(real_train_labels.detach()) 
 
         data_train = TensorDataset(images_train, labels_train)
-        trainloader = torch.utils.data.DataLoader(data_train, batch_size=args.batch_train, shuffle=True, num_workers=0)
+        trainloader = torch.utils.data.DataLoader(data_train, batch_size=args.batch_train, shuffle=False, num_workers=0) # shuffle must be false for logit
 
-        if args.aux_bn or args.alp:
+        if args.aux_bn or args.alp_embed or args.alp_live:
             # assume args.train_data_type == 'syn'
             atk_images_train, atk_labels_train = copy.deepcopy(atk_syn_images.detach()), copy.deepcopy(atk_syn_labels.detach())
             atk_data_train = TensorDataset(atk_images_train, atk_labels_train)
-            atk_trainloader = torch.utils.data.DataLoader(atk_data_train, batch_size=args.batch_train, shuffle=True, num_workers=0)
+            atk_trainloader = torch.utils.data.DataLoader(atk_data_train, batch_size=args.batch_train, shuffle=False, num_workers=0) # shuffle must be false for logit
 
 
         # Train net
         for e in range(args.train_epoch):
-            if not args.aux_bn and not args.alp:
+            if not args.aux_bn and not args.alp_embed and not args.alp_live:
                 loss, acc = epoch('train', trainloader, net, optimizer_net, criterion, args, aug = False)
             else:
                 loss, acc = epoch_alt('train', trainloader, atk_trainloader, net, optimizer_net, criterion, args, aug = False)

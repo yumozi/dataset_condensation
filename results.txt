@@ -1,6 +1,9 @@
 DSA: Run 1 experiments, train on ConvNet, evaluate 20 random ConvNet, mean  = 51.75%  std = 0.29%
 DC: Run 1 experiments, train on ConvNet, evaluate 20 random ConvNet, mean  = 44.84%  std = 0.41%
 Attack: Run 1 experiments, train on ConvNet, evaluate 20 random ConvNet, mean  = 38.24%  std = 0.65%   *just after 500 iter has same result
+just upgrade pytorch to highest version when installing
+
+python main.py --ipc 10 --init real --num_exp 1
 
 5 hours attack
 
@@ -69,4 +72,14 @@ Average accuracy over 50 trials is 0.2681
 Trained with syn data (DC), tested on normal CIFAR10 dataset. (random embed ALP)
 Average accuracy over 50 trials is 0.4219
 
+Results March 24:
+
+Trained with syn data (DC), tested on normal CIFAR10 dataset. (embed ALP)
+Average accuracy over 50 trials is 0.4482
+
+Trained with syn data (DC), tested on pgd attacked CIFAR10 dataset. (embed ALP) (eps 4/255)
+Average accuracy over 50 trials is 0.3326
+
+Trained with syn data (DC), tested on pgd attacked CIFAR10 dataset. (embed ALP) (eps 8/255)
+Average accuracy over 20 trials is 0.2926
 
