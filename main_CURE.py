@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torchvision.utils import save_image
-from utils import get_loops, get_dataset, get_network, get_eval_pool, evaluate_synset, get_daparam, match_loss, get_time, TensorDataset, epoch, DiffAugment, ParamDiffAug, Attack, ParamAttack
+from utils import get_loops, get_dataset, get_network, get_eval_pool, evaluate_synset, get_daparam, match_loss, get_time, TensorDataset, epoch, DiffAugment, ParamDiffAug, Attack, ParamAttack, NormalizeByChannelMeanStd
 
 
 def main():
@@ -19,7 +19,7 @@ def main():
     parser.add_argument('--eval_mode', type=str, default='S', help='eval_mode') # S: the same to training model, M: multi architectures,  W: net width, D: net depth, A: activation function, P: pooling layer, N: normalization layer,
     parser.add_argument('--attack-eval', action='store_true')
     parser.add_argument('--num_exp', type=int, default=1, help='the number of experiments')
-    parser.add_argument('--num_eval', type=int, default=50, help='the number of evaluating randomly initialized models')
+    parser.add_argument('--num_eval', type=int, default=20, help='the number of evaluating randomly initialized models')
     parser.add_argument('--epoch_eval_train', type=int, default=300, help='epochs to train a model with synthetic data')
     parser.add_argument('--Iteration', type=int, default=1000, help='training iterations')
     parser.add_argument('--lr_img', type=float, default=0.1, help='learning rate for updating synthetic images')
@@ -55,6 +55,7 @@ def main():
     print('eval_it_pool: ', eval_it_pool)
     channel, im_size, num_classes, class_names, mean, std, dst_train, dst_test, testloader = get_dataset(args.dataset, args.data_path)
     model_eval_pool = get_eval_pool(args.eval_mode, args.model, args.model)
+    normalize = NormalizeByChannelMeanStd(mean=mean, std=std)
 
 
     accs_all_exps = dict() # record performances of all experiments
@@ -142,6 +143,10 @@ def main():
                     accs = []
                     for it_eval in range(args.num_eval):
                         net_eval = get_network(model_eval, channel, num_classes, im_size).to(args.device) # get a random model
+
+                        # torchattack fix
+                        net_eval = nn.Sequential(normalize, net_eval)
+
                         image_syn_eval, label_syn_eval = copy.deepcopy(image_syn.detach()), copy.deepcopy(label_syn.detach()) # avoid any unaware modification
                         _, acc_train, acc_test = evaluate_synset(it_eval, net_eval, image_syn_eval, label_syn_eval, testloader, args)
                         accs.append(acc_test)
@@ -162,6 +167,10 @@ def main():
 
             ''' Train synthetic data '''
             net = get_network(args.model, channel, num_classes, im_size).to(args.device) # get a random model
+
+            # torchattack fix
+            net = nn.Sequential(normalize, net)
+
             net.train()
             net_parameters = list(net.parameters())
             optimizer_net = torch.optim.SGD(net.parameters(), lr=args.lr_net)  # optimizer_img for synthetic data
@@ -204,7 +213,7 @@ def main():
                         img_real = DiffAugment(img_real, args.dsa_strategy, seed=seed, param=args.dsa_param)
                         img_syn = DiffAugment(img_syn, args.dsa_strategy, seed=seed, param=args.dsa_param)
 
-                    if args.method == 'Attack':
+                    if args.attack:
                         seed = int(time.time() * 1000) % 100000
                         # We only want to attack the real dataset
                         img_real = Attack(img_real, lab_real, net, args.attack_strategy, seed=seed, param=args.attack_param)

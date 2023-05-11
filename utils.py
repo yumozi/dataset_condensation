@@ -18,7 +18,7 @@ def get_dataset(dataset, data_path):
         num_classes = 10
         mean = [0.1307]
         std = [0.3081]
-        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
+        transform = transforms.Compose([transforms.ToTensor()])
         dst_train = datasets.MNIST(data_path, train=True, download=True, transform=transform) # no augmentation
         dst_test = datasets.MNIST(data_path, train=False, download=True, transform=transform)
         class_names = [str(c) for c in range(num_classes)]
@@ -29,7 +29,7 @@ def get_dataset(dataset, data_path):
         num_classes = 10
         mean = [0.2861]
         std = [0.3530]
-        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
+        transform = transforms.Compose([transforms.ToTensor()])
         dst_train = datasets.FashionMNIST(data_path, train=True, download=True, transform=transform) # no augmentation
         dst_test = datasets.FashionMNIST(data_path, train=False, download=True, transform=transform)
         class_names = dst_train.classes
@@ -40,7 +40,7 @@ def get_dataset(dataset, data_path):
         num_classes = 10
         mean = [0.4377, 0.4438, 0.4728]
         std = [0.1980, 0.2010, 0.1970]
-        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
+        transform = transforms.Compose([transforms.ToTensor()])
         dst_train = datasets.SVHN(data_path, split='train', download=True, transform=transform)  # no augmentation
         dst_test = datasets.SVHN(data_path, split='test', download=True, transform=transform)
         class_names = [str(c) for c in range(num_classes)]
@@ -51,7 +51,7 @@ def get_dataset(dataset, data_path):
         num_classes = 10
         mean = [0.4914, 0.4822, 0.4465]
         std = [0.2023, 0.1994, 0.2010]
-        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
+        transform = transforms.Compose([transforms.ToTensor()])
         dst_train = datasets.CIFAR10(data_path, train=True, download=True, transform=transform) # no augmentation
         dst_test = datasets.CIFAR10(data_path, train=False, download=True, transform=transform)
         class_names = dst_train.classes
@@ -62,7 +62,7 @@ def get_dataset(dataset, data_path):
         num_classes = 100
         mean = [0.5071, 0.4866, 0.4409]
         std = [0.2673, 0.2564, 0.2762]
-        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
+        transform = transforms.Compose([transforms.ToTensor()])
         dst_train = datasets.CIFAR100(data_path, train=True, download=True, transform=transform) # no augmentation
         dst_test = datasets.CIFAR100(data_path, train=False, download=True, transform=transform)
         class_names = dst_train.classes
@@ -81,8 +81,8 @@ def get_dataset(dataset, data_path):
         labels_train = data['labels_train']
         images_train = images_train.detach().float() / 255.0
         labels_train = labels_train.detach()
-        for c in range(channel):
-            images_train[:,c] = (images_train[:,c] - mean[c])/std[c]
+        # for c in range(channel):
+        #     images_train[:,c] = (images_train[:,c] - mean[c])/std[c]
         dst_train = TensorDataset(images_train, labels_train)  # no augmentation
 
         images_val = data['images_val']
@@ -719,10 +719,30 @@ def rand_cutout(x, param):
 
 class ParamAttack:
     def __init__(self):
-        # self.eps = 8/255
-        self.eps = 8/255
-        self.alpha = 1/255
+        # MNIST
+        # self.eps = 0.3
+        # self.alpha = 0.1
+        # self.step = 10
+        self.eps = 0.1
+        self.alpha = 0.03
         self.step = 10
+        # self.eps = 1
+        # self.alpha = 0.3
+        # self.step = 10
+
+        # CIFAR10
+        # self.eps = 8/255
+        # self.alpha = 2/255
+        # self.step = 10
+        # self.eps = 8/255
+        # self.alpha = 0.5/255
+        # self.step = 10
+        # self.eps = 0.2
+        # self.alpha = 0.05
+        # self.step = 10
+
+      
+
 
 def set_seed_Attack(param):
     if param.latestseed == -1:
@@ -765,10 +785,16 @@ def auto_attack(x, y, net, param):
     x = attack(x, y)
     return x
 
+def pgdl2(x, y, net, param):
+    attack = torchattacks.PGDL2(net, eps=param.eps, alpha=param.alpha, steps=param.step)
+    x = attack(x, y)
+    return x
+
 ATTACK_FNS = {
     'pgd' : pgd,
     'fgsm' : fgsm,
     'auto_attack' : auto_attack,
+    'pgdl2' : pgdl2,
 }
 
 
@@ -780,3 +806,31 @@ AUGMENT_FNS = {
     'scale': [rand_scale],
     'rotate': [rand_rotate],
 }
+
+def normalize_fn(tensor, mean, std):
+    """Differentiable version of torchvision.functional.normalize"""
+    # here we assume the color channel is in at dim=1
+    mean = mean[None, :, None, None]
+    std = std[None, :, None, None]
+    return tensor.sub(mean).div(std)
+
+
+class NormalizeByChannelMeanStd(nn.Module):
+    def __init__(self, mean, std, others=None):
+        super(NormalizeByChannelMeanStd, self).__init__()
+        if not isinstance(mean, torch.Tensor):
+            mean = torch.tensor(mean)
+        if not isinstance(std, torch.Tensor):
+            std = torch.tensor(std)
+        self.others = others  # other transformation
+        self.register_buffer("mean", mean)
+        self.register_buffer("std", std)
+
+    def forward(self, tensor):
+        normalized = normalize_fn(tensor, self.mean, self.std)
+        if self.others is not None:
+            normalized = self.others(normalized)
+        return normalized
+
+    def extra_repr(self):
+        return 'mean={}, std={}'.format(self.mean, self.std)
