@@ -32,7 +32,7 @@ def main():
     parser.add_argument('--data_path', type=str, default='data', help='dataset path')
     parser.add_argument('--save_path', type=str, default='result', help='path to save results')
     parser.add_argument('--dis_metric', type=str, default='ours', help='distance metric')
-    parser.add_argument('--lamda', type=float, default=500, help='lamda for CURE method')
+    parser.add_argument('--lamda', type=float, default=100, help='lamda for CURE method')
 
 
     args = parser.parse_args()
@@ -221,7 +221,7 @@ def main():
                     output_real = net(img_real)
                     loss_real = criterion(output_real, lab_real)
 
-                    h = 3.
+                    h = 0.6
                     lamda = args.lamda
                     # CURE changes the model to "eval" state, which may need to be restored later
                     if args.cure:
