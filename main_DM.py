@@ -31,6 +31,7 @@ def main():
     parser.add_argument('--dis_metric', type=str, default='ours', help='distance metric')
 
     args = parser.parse_args()
+    args.attack_eval = False
     args.method = 'DM'
     args.outer_loop, args.inner_loop = get_loops(args.ipc)
     args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
