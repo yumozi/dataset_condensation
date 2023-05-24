@@ -31,6 +31,7 @@ def parse_args():
     parser.add_argument('--dataset', type=str, default='CIFAR10', help='dataset')
     parser.add_argument('--syn_method', type=str, default='DC', help='which synthetic data to use, Attack/DC/DSA/CURE')
     parser.add_argument('--test_syn', action='store_true', help='whether to test curvature on the synthetic set')
+    parser.add_argument('--train_syn', action='store_true', help='whether to train model on the synthetic set')
     parser.add_argument('--ipc', type=int, default=10, help='images per class')
 
     # Training
@@ -112,9 +113,14 @@ optimizer_net = torch.optim.SGD(net.parameters(), lr=args.lr_net)  # optimizer_i
 criterion = nn.CrossEntropyLoss().to(args.device)
 loss_avg = 0
 
-data_train = TensorDataset(images_train, labels_train)
-trainloader = torch.utils.data.DataLoader(data_train, batch_size=args.batch_train, shuffle=True,
-                                          num_workers=0)  # shuffle must be false for logit
+if args.train_syn:
+    data_train = TensorDataset(images_train, labels_train)
+    trainloader = torch.utils.data.DataLoader(data_train, batch_size=args.batch_train, shuffle=True,
+                                            num_workers=0)  # shuffle must be false for logit
+else:
+    data_train = TensorDataset(real_train_images, real_train_labels)
+    trainloader = torch.utils.data.DataLoader(data_train, batch_size=args.batch_train, shuffle=True,
+                                            num_workers=0)
 
 # Train net
 print('==> Training network..')
