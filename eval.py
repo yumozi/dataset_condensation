@@ -8,7 +8,7 @@ import sys
 import numpy as np
 from utils import get_dataset, epoch, epoch_alt, get_network, TensorDataset, Attack, ParamAttack, NormalizeByChannelMeanStd
 import torchattacks
-
+import time
 
 def main():
 
@@ -32,6 +32,7 @@ def main():
     parser.add_argument('--alp_embed', type=bool, default=False, help='whether to apply adversarial logit pairing for training')
     parser.add_argument('--alp_live', type=bool, default=False, help='whether to apply adversarial logit pairing for training')
     parser.add_argument('--ipc', type=int, default=10, help='images per class')
+    parser.add_argument('--attack_train', type=bool, default=False, help='whether to perform attack during train')
     # parser.add_argument('--eval_mode', type=str, default='SS', help='eval_mode') # S: the same to training model, M: multi architectures,  W: net width, D: net depth, A: activation function, P: pooling layer, N: normalization layer,
     # parser.add_argument('--num_exp', type=int, default=5, help='the number of experiments')
     # parser.add_argument('--num_eval', type=int, default=20, help='the number of evaluating randomly initialized models')
@@ -106,6 +107,7 @@ def main():
     normalize = NormalizeByChannelMeanStd(mean=mean, std=std)
 
     acc_list = []
+    time_list = []
     for trial in range(args.trials):
 
         # Setup net
@@ -141,6 +143,7 @@ def main():
 
 
         # Train net
+        time_start = time.time()
         for e in range(args.train_epoch):
             if not args.aux_bn and not args.alp_embed and not args.alp_live:
                 loss, acc = epoch('train', trainloader, net, optimizer_net, criterion, args, aug = False)
@@ -151,11 +154,13 @@ def main():
         images_test, labels_test = copy.deepcopy(real_test_images.detach()), copy.deepcopy(real_test_labels.detach()) 
         data_test = TensorDataset(images_test, labels_test)
         testloader = torch.utils.data.DataLoader(data_test, batch_size=args.batch_test, shuffle=True, num_workers=0)
+        time_end = time.time()
         
         # Test net
         loss, acc = epoch('test', testloader, net, optimizer_net, criterion, args, aug = False)
         print(f'Trial {trial}: acc = {acc}')
         acc_list.append(acc)
+        time_list.append(acc)
 
     if args.attack_eval:
         print(f'Trained with {args.train_data_type} data ({args.syn_data_type}), tested on {args.attack_strategy} attacked {args.real_dataset} dataset.')
@@ -163,6 +168,7 @@ def main():
         print(f'Trained with {args.train_data_type} data ({args.syn_data_type}), tested on normal {args.real_dataset} dataset.')
 
     print(f'Average accuracy over {args.trials} trials is {round(np.mean(acc_list) * 100, 1)}±{round(np.std(acc_list) * 100, 1)}')
+    print(f'Average time over {args.trials} trials is {round(np.mean(time_list), 1)}±{round(np.std(time_list), 1)}')
 
 if __name__ == '__main__':
     main()
