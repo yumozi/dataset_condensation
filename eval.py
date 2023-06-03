@@ -160,7 +160,7 @@ def main():
         loss, acc = epoch('test', testloader, net, optimizer_net, criterion, args, aug = False)
         print(f'Trial {trial}: acc = {acc}')
         acc_list.append(acc)
-        time_list.append(acc)
+        time_list.append(time_end - time_start)
 
     if args.attack_eval:
         print(f'Trained with {args.train_data_type} data ({args.syn_data_type}), tested on {args.attack_strategy} attacked {args.real_dataset} dataset.')
