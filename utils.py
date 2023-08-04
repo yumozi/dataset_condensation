@@ -110,7 +110,7 @@ def get_dataset(dataset, data_path):
         
         # Convert images and labels to tensors
         tensor_images = torch.stack([ToTensor()(Image.open(i)) for i in image_files])
-        tensor_labels = torch.tensor([class_names.index(i) for i in labels])
+        tensor_labels = torch.tensor([unique_labels.index(i) for i in labels])
         
         # Compute mean and standard deviation
         mean = tensor_images.mean(dim=[0,2,3])
