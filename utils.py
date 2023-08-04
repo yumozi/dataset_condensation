@@ -99,27 +99,36 @@ def get_dataset(dataset, data_path):
     elif dataset == 'ImageNette':
         channel = 3
         im_size = (320, 320)
+        transform = transforms.Compose([transforms.Resize((320, 320)),
+                                    transforms.ToTensor()])
         num_classes = 10
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
+        
+        def folder_to_dataset(folder):
+            images = []
+            labels = []
+            classnames = []
+            for label_idx, class_folder in enumerate(os.listdir(folder)):
+                class_folder_path = os.path.join(folder, class_folder)
+                for img_file in os.listdir(class_folder_path):
+                    img_path = os.path.join(class_folder_path, img_file)
+                    try:
+                        img = Image.open(img_path).convert('RGB') # open and ensure 3-channel image
+                        img = transform(img) # apply transformations
+                        images.append(img)
+                        labels.append(label_idx)
+                    except Exception as e:
+                        print(f'Error loading image: {img_path}, {str(e)}')
+                classnames.append(class_folder) # append class name
+            return TensorDataset(torch.stack(images), torch.tensor(labels)), classnames
 
-        path = untar_data(URLs.IMAGENETTE_320)
-        
-        # Get image files and labels
-        image_files = get_image_files(path)
-        labels = [parent_label(i) for i in image_files]
-        class_names = list(set(labels))
-        
-        # Convert images and labels to tensors
-        tensor_images = torch.stack([ToTensor()(Image.open(i)) for i in image_files])
-        tensor_labels = torch.tensor([unique_labels.index(i) for i in labels])
-        
-        # Compute mean and standard deviation
-        mean = tensor_images.mean(dim=[0,2,3])
-        std = tensor_images.std(dim=[0,2,3])
-        
-        # Split into train and test datasets
-        n_train = int(len(tensor_images) * 0.8)
-        n_test = len(tensor_images) - n_train
-        dst_train, dst_test = random_split(TensorDataset(tensor_images, tensor_labels), [n_train, n_test])
+        dataset_path = os.path.join(data_path, 'imagenette2-320/')
+        train_folder = os.path.join(dataset_path, 'train')
+        val_folder = os.path.join(dataset_path, 'val')
+
+        dst_train, class_names = folder_to_dataset(train_folder)
+        dst_test, _ = folder_to_dataset(val_folder)
 
     else:
         exit('unknown dataset: %s'%dataset)

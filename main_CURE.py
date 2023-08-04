@@ -43,6 +43,7 @@ def main():
     args.dsa = True if args.method == 'DSA' else False
     args.attack = True if args.method == "Attack" else False
     args.cure = True if args.method == "CURE" else False
+    args.attack_train = False
 
 
     if not os.path.exists(args.data_path):
