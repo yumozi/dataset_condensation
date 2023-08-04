@@ -9,7 +9,8 @@ from torchvision import datasets, transforms
 from scipy.ndimage.interpolation import rotate as scipyrotate
 from networks import MLP, ConvNet, LeNet, AlexNet, AlexNetBN, VGG11, VGG11BN, ResNet18, ResNet18BN_AP, ResNet18BN
 import torchattacks
-
+from torch.utils.data import random_split
+from fastai.vision.all import *
 
 def get_dataset(dataset, data_path):
     if dataset == 'MNIST':
@@ -94,6 +95,31 @@ def get_dataset(dataset, data_path):
             images_val[:, c] = (images_val[:, c] - mean[c]) / std[c]
 
         dst_test = TensorDataset(images_val, labels_val)  # no augmentation
+
+    elif dataset == 'ImageNette':
+        channel = 3
+        im_size = (320, 320)
+        num_classes = 10
+
+        path = untar_data(URLs.IMAGENETTE_320)
+        
+        # Get image files and labels
+        image_files = get_image_files(path)
+        labels = [parent_label(i) for i in image_files]
+        class_names = list(set(labels))
+        
+        # Convert images and labels to tensors
+        tensor_images = torch.stack([ToTensor()(Image.open(i)) for i in image_files])
+        tensor_labels = torch.tensor([class_names.index(i) for i in labels])
+        
+        # Compute mean and standard deviation
+        mean = tensor_images.mean(dim=[0,2,3])
+        std = tensor_images.std(dim=[0,2,3])
+        
+        # Split into train and test datasets
+        n_train = int(len(tensor_images) * 0.8)
+        n_test = len(tensor_images) - n_train
+        dst_train, dst_test = random_split(TensorDataset(tensor_images, tensor_labels), [n_train, n_test])
 
     else:
         exit('unknown dataset: %s'%dataset)
@@ -316,6 +342,10 @@ def epoch(mode, dataloader, net, optimizer, criterion, args, aug):
                 img = augment(img, args.dc_aug_param, device=args.device)
         if args.attack_eval and mode == 'test':
             img = Attack(img, lab, net, args.attack_strategy, seed=int(time.time() * 1000) % 100000, param=args.attack_param)
+
+        if args.attack_train and mode == 'train':
+            img = Attack(img, lab, net, args.attack_strategy, seed=int(time.time() * 1000) % 100000, param=args.attack_param)
+
         
         n_b = lab.shape[0]
 
