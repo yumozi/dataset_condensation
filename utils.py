@@ -137,9 +137,13 @@ def get_dataset(dataset, data_path):
 
     else:
         exit('unknown dataset: %s'%dataset)
+    
+    if dataset != 'ImageNette':
+        batch_size = 256
+    else:
+        batch_size = 64 # 64 is the largest batch on A100 for imagenette
 
-
-    testloader = torch.utils.data.DataLoader(dst_test, batch_size=256, shuffle=False, num_workers=0)
+    testloader = torch.utils.data.DataLoader(dst_test, batch_size=batch_size, shuffle=False, num_workers=0)
     return channel, im_size, num_classes, class_names, mean, std, dst_train, dst_test, testloader
 
 
