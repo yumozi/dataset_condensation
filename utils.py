@@ -99,7 +99,7 @@ def get_dataset(dataset, data_path):
     elif dataset == 'ImageNette':
         channel = 3
         im_size = (160, 160)
-        transform = transforms.Compose([transforms.Resize((160, 160z)),
+        transform = transforms.Compose([transforms.Resize((160, 160)),
                                     transforms.ToTensor()])
         num_classes = 10
 
