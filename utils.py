@@ -99,7 +99,7 @@ def get_dataset(dataset, data_path):
     elif dataset == 'ImageNette':
         channel = 3
         im_size = (160, 160)
-        transform = transforms.Compose([transforms.Resize((160, 160)),
+        transform = transforms.Compose([transforms.Resize((160, 160z)),
                                     transforms.ToTensor()])
         num_classes = 10
 
@@ -316,7 +316,8 @@ def match_loss(gw_syn, gw_real, args):
 
     return dis
 
-
+def get_time():
+    return str(time.strftime("[%Y-%m-%d %H:%M:%S]", time.localtime()))
 
 def get_loops(ipc):
     # Get the two hyper-parameters of outer-loop and inner-loop.
