@@ -251,7 +251,7 @@ def get_network(model, channel, num_classes, im_size=(32, 32)):
 
 
 
-def get_time():
+def xtime():
     return str(time.strftime("[%Y-%m-%d %H:%M:%S]", time.localtime()))
 
 
@@ -855,6 +855,8 @@ AUGMENT_FNS = {
 def normalize_fn(tensor, mean, std):
     """Differentiable version of torchvision.functional.normalize"""
     # here we assume the color channel is in at dim=1
+    mean.to(tensor.device)
+    std.to(tensor.device)
     mean = mean[None, :, None, None]
     std = std[None, :, None, None]
     return tensor.sub(mean).div(std)
