@@ -102,8 +102,6 @@ def get_dataset(dataset, data_path):
         transform = transforms.Compose([transforms.Resize((320, 320)),
                                     transforms.ToTensor()])
         num_classes = 10
-        mean = [0.485, 0.456, 0.406]
-        std = [0.229, 0.224, 0.225]
 
         def folder_to_dataset(folder):
             images = []
@@ -128,6 +126,13 @@ def get_dataset(dataset, data_path):
         val_folder = os.path.join(dataset_path, 'val')
 
         dst_train, class_names = folder_to_dataset(train_folder)
+
+        # calculate mean and std from dst_train
+        mean = []
+        std = []
+        for c in range(channel):
+            mean.append(torch.mean(dst_train.images[:,c]))
+            std.append(torch.std(dst_train.images[:,c]))
         dst_test, _ = folder_to_dataset(val_folder)
 
     else:
