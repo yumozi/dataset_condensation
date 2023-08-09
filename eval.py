@@ -6,7 +6,7 @@ import torch.nn as nn
 import pdb
 import sys
 import numpy as np
-from utils import get_dataset, epoch, epoch_alt, get_network, TensorDataset, Attack, ParamAttack, NormalizeByChannelMeanStd
+from utils import get_dataset, epoch, epoch_alt, get_network, TensorDataset, Attack, ParamAttack, NormalizeByChannelMeanStd, get_daparam
 import torchattacks
 import time
 
@@ -141,12 +141,14 @@ def main():
             atk_data_train = TensorDataset(atk_images_train, atk_labels_train)
             atk_trainloader = torch.utils.data.DataLoader(atk_data_train, batch_size=args.batch_train, shuffle=False, num_workers=0) # shuffle must be false for logit
 
+        model_eval = [args.model]
+        args.dc_aug_param = get_daparam(args.dataset, args.model, model_eval, args.ipc)
 
         # Train net
         time_start = time.time()
         for e in range(args.train_epoch):
             if not args.aux_bn and not args.alp_embed and not args.alp_live:
-                loss, acc = epoch('train', trainloader, net, optimizer_net, criterion, args, aug = False)
+                loss, acc = epoch('train', trainloader, net, optimizer_net, criterion, args, aug = True)
             else:
                 loss, acc = epoch_alt('train', trainloader, atk_trainloader, net, optimizer_net, criterion, args, aug = False)
 
