@@ -120,7 +120,7 @@ def main():
         net.train()
         net_parameters = list(net.parameters())
         if args.train_data_type == 'syn':
-            optimizer_net = torch.optim.SGD(net.parameters(), lr=args.lr_net)  # optimizer_img for synthetic data
+            optimizer_net = torch.optim.SGD(net.parameters(), lr=args.lr_net, momentum=0.9, weight_decay=0.0005)  # optimizer_img for synthetic data
         else: 
             optimizer_net = torch.optim.Adam(net.parameters(), lr=args.lr_net)  # use Adam for real data
         optimizer_net.zero_grad()
