@@ -91,6 +91,9 @@ def main():
         im_size = (28, 28)
     elif args.syn_dataset == 'CIFAR100':
         num_classes = 100
+    elif args.syn_dataset == 'ImageNette':
+        num_classes = 10
+        im_size = (160, 160)
 
     # Load Real Data (only need info if using real data to train)
     channel, im_size, num_classes, class_names, mean, std, dst_train, dst_test, testloader = get_dataset(args.real_dataset, args.real_data_path)
