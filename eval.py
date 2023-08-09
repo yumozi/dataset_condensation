@@ -42,6 +42,7 @@ def main():
 
     args = parser.parse_args()
     args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    args.dsa = False
 
     # If aux_bn is True, also load Attacked Distilled Data
     if args.aux_bn or args.alp_embed or args.alp_live:
