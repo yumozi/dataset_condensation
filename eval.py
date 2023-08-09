@@ -142,7 +142,7 @@ def main():
             atk_trainloader = torch.utils.data.DataLoader(atk_data_train, batch_size=args.batch_train, shuffle=False, num_workers=0) # shuffle must be false for logit
 
         model_eval = [args.model]
-        args.dc_aug_param = get_daparam(args.dataset, args.model, model_eval, args.ipc)
+        args.dc_aug_param = get_daparam(args.real_dataset, args.model, model_eval, args.ipc)
 
         # Train net
         time_start = time.time()
