@@ -775,9 +775,9 @@ def rand_cutout(x, param):
 class ParamAttack:
     def __init__(self):
         # MNIST
-        # self.eps = 0.3
-        # self.alpha = 0.1
-        # self.step = 10
+        self.eps = 0.3
+        self.alpha = 0.1
+        self.step = 10
         # self.eps = 0.1
         # self.alpha = 0.03
         # self.step = 10
@@ -792,9 +792,11 @@ class ParamAttack:
         # self.eps = 2/255
         # self.alpha = 0.5/255
         # self.step = 10
-        self.eps = 0.2
-        self.alpha = 0.05
-        self.step = 10
+        # self.eps = 0.2
+        # self.alpha = 0.05
+        # self.step = 10
+
+        self.norm = 'Linf'
 
       
 
