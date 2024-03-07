@@ -355,6 +355,8 @@ def epoch(mode, dataloader, net, optimizer, criterion, args, aug):
     else:
         net.eval()
 
+    accuracies = {'PGD100': [], 'Square': [], 'AutoAttack': [], 'CW': [], 'MIM': [], 'Clean': []}
+    count = 0
     for i_batch, datum in enumerate(dataloader):
         img = datum[0].float().to(args.device)
         lab = datum[1].long().to(args.device)
@@ -363,14 +365,60 @@ def epoch(mode, dataloader, net, optimizer, criterion, args, aug):
                 img = DiffAugment(img, args.dsa_strategy, param=args.dsa_param)
             else:
                 img = augment(img, args.dc_aug_param, device=args.device)
-        if args.attack_eval and mode == 'test':
-            img = Attack(img, lab, net, args.attack_strategy, seed=int(time.time() * 1000) % 100000, param=args.attack_param)
 
-        if args.attack_train and mode == 'train':
-            img = Attack(img, lab, net, args.attack_strategy, seed=int(time.time() * 1000) % 100000, param=args.attack_param)
-
+        # if (args.attack_eval and mode == 'test'):
+        #     img = attack_img(args, net, img, lab)
         
         n_b = lab.shape[0]
+
+        if (args.attack_eval and mode == 'test'):
+            # Apply PGD100
+            attack = torchattacks.PGD(net, eps=1/255, alpha=0.25/255, steps=100)
+            attacked_img = attack(img, lab)
+            output = net(attacked_img)
+            correct = np.equal(np.argmax(output.cpu().data.numpy(), axis=-1), lab.cpu().data.numpy())
+            accuracies['PGD100'].append(np.sum(correct))
+            
+            # Apply Square
+            attack = torchattacks.Square(net, eps=1/255)
+            attacked_img = attack(img, lab)
+            output = net(attacked_img)
+            correct = np.equal(np.argmax(output.cpu().data.numpy(), axis=-1), lab.cpu().data.numpy())
+            accuracies['Square'].append(np.sum(correct))
+            
+            # Apply AutoAttack
+            attack = torchattacks.AutoAttack(net, eps=1/255)
+            attacked_img = attack(img, lab)
+            output = net(attacked_img)
+            correct = np.equal(np.argmax(output.cpu().data.numpy(), axis=-1), lab.cpu().data.numpy())
+            accuracies['AutoAttack'].append(np.sum(correct))
+
+            # Apply CW
+            attack = torchattacks.CW(net, c=0.0001)
+            attacked_img = attack(img, lab)
+            output = net(attacked_img)
+            correct = np.equal(np.argmax(output.cpu().data.numpy(), axis=-1), lab.cpu().data.numpy())
+            accuracies['CW'].append(np.sum(correct))
+
+            # Apply MIM
+            attacked_img = mim_attack(net, img, lab, epsilon=1/255, alpha=0.25/255, iters=20, decay=1.0)
+            output = net(attacked_img)
+            correct = np.equal(np.argmax(output.cpu().data.numpy(), axis=-1), lab.cpu().data.numpy())
+            accuracies['MIM'].append(np.sum(correct))
+
+            output = net(img)
+            loss = criterion(output, lab)
+
+            # Calculate clean accuracy
+            correct = np.equal(np.argmax(output.cpu().data.numpy(), axis=-1), lab.cpu().data.numpy())
+            accuracies['Clean'].append(np.sum(correct))
+
+            loss_avg += loss.item()*n_b
+            acc_avg += np.sum(correct)
+            num_exp += n_b
+
+            # Add total number of examples to count
+            count += n_b
 
         output = net(img)
         loss = criterion(output, lab)
@@ -385,6 +433,15 @@ def epoch(mode, dataloader, net, optimizer, criterion, args, aug):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+    
+    if (args.attack_eval and mode == 'test'):
+        print("Clean accuracy: ", np.sum(accuracies['Clean'])/count)
+        print("PGD100 accuracy: ", np.sum(accuracies['PGD100'])/count)
+        print("Square accuracy: ", np.sum(accuracies['Square'])/count)
+        print("AutoAttack accuracy: ", np.sum(accuracies['AutoAttack'])/count)
+        print("CW accuracy: ", np.sum(accuracies['CW'])/count)
+        print("MIM accuracy: ", np.sum(accuracies['MIM'])/count)
+        print("")
 
     loss_avg /= num_exp
     acc_avg /= num_exp
@@ -465,6 +522,29 @@ def epoch_alt(mode, norm_dataloader, atk_dataloader, net, optimizer, criterion, 
     acc_avg /= num_exp
 
     return loss_avg, acc_avg
+
+
+def mim_attack(model, data, target, epsilon, alpha, iters, decay):
+    """Perform MIM attack on the input data."""
+    original_data = data.clone().detach()
+    data.requires_grad = True
+    momentum = torch.zeros_like(data)
+
+    for _ in range(iters):
+        output = model(data)
+        model.zero_grad()
+        loss = nn.CrossEntropyLoss()(output, target)
+        loss.backward()
+        data_grad = data.grad.data
+
+        # Update the momentum
+        momentum = decay * momentum + data_grad / torch.norm(data_grad, p=1)
+        data = data.detach() + alpha * momentum.sign()
+        data = torch.clamp(data, original_data - epsilon, original_data + epsilon)
+        data = torch.clamp(data, 0, 1)  # assuming data is normalized between 0 and 1
+        data.requires_grad = True
+
+    return data.detach()
 
 def evaluate_synset(it_eval, net, images_train, labels_train, testloader, args):
     net = net.to(args.device)
@@ -772,6 +852,82 @@ def rand_cutout(x, param):
     x = x * mask.unsqueeze(1)
     return x
 
+def attack_img(args, net, img, lab):
+   
+    # unnormalize the img
+    inv_normalize = transforms.Normalize(
+        mean=[-args.mean[0]/args.std[0], -args.mean[1]/args.std[1], -args.mean[2]/args.std[2]],
+        std=[1/args.std[0], 1/args.std[1], 1/args.std[2]]
+    )
+    img = inv_normalize(img)
+
+    # reduce range to [0, 1]
+    # img = img / 255
+
+    # clip img to [0, 1]
+    img = torch.clamp(img, 0, 1)
+
+    # perform attack
+    if args.attack_strategy == 'weak_PGD':
+        attack = torchattacks.PGD(net, eps=2/255, alpha=0.5/255, steps=10)
+        img = attack(img, lab)
+    elif args.attack_strategy == 'strong_PGD':
+        attack = torchattacks.PGD(net, eps=8/255, alpha=2/255, steps=10)
+        img = attack(img, lab)
+    elif args.attack_strategy == 'Square':
+        attack = torchattacks.Square(net, norm='Linf', eps=2/255)
+        img = attack(img, lab)
+    elif args.attack_strategy == 'Corruption':
+        # Apply color jitter and gaussian blur
+        transform = transforms.Compose([
+            transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5),
+            transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0))
+        ])
+        img = transform(img)
+    else:
+        # exit with error
+        exit('unknown attack strategy')
+
+    # normalize the img
+    normalize = transforms.Normalize(
+        mean=args.mean,
+        std=args.std
+    )
+    img = normalize(img)
+    return img
+
+def normalize_fn(tensor, mean, std):
+    """Differentiable version of torchvision.functional.normalize"""
+    # here we assume the color channel is in at dim=1
+    mean.to(tensor.device)
+    std.to(tensor.device)
+    mean = mean[None, :, None, None]
+    std = std[None, :, None, None]
+    return tensor.sub(mean).div(std)
+
+
+class NormalizeByChannelMeanStd(nn.Module):
+    def __init__(self, mean, std, others=None):
+        super(NormalizeByChannelMeanStd, self).__init__()
+        if not isinstance(mean, torch.Tensor):
+            mean = torch.tensor(mean)
+        if not isinstance(std, torch.Tensor):
+            std = torch.tensor(std)
+        self.others = others  # other transformation
+        self.register_buffer("mean", mean)
+        self.register_buffer("std", std)
+
+    def forward(self, tensor):
+        normalized = normalize_fn(tensor, self.mean, self.std)
+        if self.others is not None:
+            normalized = self.others(normalized)
+        return normalized
+
+    def extra_repr(self):
+        return 'mean={}, std={}'.format(self.mean, self.std)
+
+
+
 class ParamAttack:
     def __init__(self):
         # MNIST
@@ -863,33 +1019,3 @@ AUGMENT_FNS = {
     'scale': [rand_scale],
     'rotate': [rand_rotate],
 }
-
-def normalize_fn(tensor, mean, std):
-    """Differentiable version of torchvision.functional.normalize"""
-    # here we assume the color channel is in at dim=1
-    mean.to(tensor.device)
-    std.to(tensor.device)
-    mean = mean[None, :, None, None]
-    std = std[None, :, None, None]
-    return tensor.sub(mean).div(std)
-
-
-class NormalizeByChannelMeanStd(nn.Module):
-    def __init__(self, mean, std, others=None):
-        super(NormalizeByChannelMeanStd, self).__init__()
-        if not isinstance(mean, torch.Tensor):
-            mean = torch.tensor(mean)
-        if not isinstance(std, torch.Tensor):
-            std = torch.tensor(std)
-        self.others = others  # other transformation
-        self.register_buffer("mean", mean)
-        self.register_buffer("std", std)
-
-    def forward(self, tensor):
-        normalized = normalize_fn(tensor, self.mean, self.std)
-        if self.others is not None:
-            normalized = self.others(normalized)
-        return normalized
-
-    def extra_repr(self):
-        return 'mean={}, std={}'.format(self.mean, self.std)

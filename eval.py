@@ -22,7 +22,7 @@ def main():
     parser.add_argument('--save_path', type=str, default='result', help='path to save results')
     parser.add_argument('--lr_net', type=float, default=0.01, help='learning rate for updating network parameters')
     parser.add_argument('--train_epoch', type=int, default=50, help='epochs to train net for real data (syn data is constant)')
-    parser.add_argument('--trials', type=int, default=50, help='trials to test net')
+    parser.add_argument('--trials', type=int, default=1, help='trials to test net')
     parser.add_argument('--batch_train', type=int, default=256, help='batch size for training networks')
     parser.add_argument('--batch_test', type=int, default=256, help='batch size for testing networks')
     parser.add_argument('--attack_eval', type=bool, default=False, help='whether to perform attack during eval')
